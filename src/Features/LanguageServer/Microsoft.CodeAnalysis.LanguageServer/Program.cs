@@ -7,6 +7,7 @@ using System.CommandLine;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using Microsoft.CodeAnalysis.Contracts.Telemetry;
+using Microsoft.CodeAnalysis.FlowAnalysis.DataFlow;
 using Microsoft.CodeAnalysis.LanguageServer;
 using Microsoft.CodeAnalysis.LanguageServer.BrokeredServices;
 using Microsoft.CodeAnalysis.LanguageServer.BrokeredServices.Services.HelloWorld;
@@ -105,6 +106,11 @@ static async Task RunAsync(ServerConfiguration serverConfiguration, Cancellation
     server.Start();
 
     logger.LogInformation("Language server initialized");
+    if (!string.IsNullOrEmpty(serverConfiguration.SolutionPath))
+    {
+        var projectSystem = exportProvider.GetExportedValue<LanguageServerProjectSystem>();
+        await projectSystem.OpenSolutionAsync(serverConfiguration.SolutionPath);
+    }
 
     try
     {
@@ -174,6 +180,12 @@ static CliRootCommand CreateCommandLineParser()
         Required = false
     };
 
+    var solutionPathOption = new CliOption<string?>("--solution")
+    {
+        Description = "Full path of solution to load (optional).",
+        Required = false
+    };
+
     var rootCommand = new CliRootCommand()
     {
         debugOption,
@@ -184,7 +196,8 @@ static CliRootCommand CreateCommandLineParser()
         sessionIdOption,
         sharedDependenciesOption,
         extensionAssemblyPathsOption,
-        extensionLogDirectoryOption
+        extensionLogDirectoryOption,
+        solutionPathOption
     };
     rootCommand.SetAction((parseResult, cancellationToken) =>
     {
@@ -196,6 +209,7 @@ static CliRootCommand CreateCommandLineParser()
         var sharedDependenciesPath = parseResult.GetValue(sharedDependenciesOption);
         var extensionAssemblyPaths = parseResult.GetValue(extensionAssemblyPathsOption) ?? Array.Empty<string>();
         var extensionLogDirectory = parseResult.GetValue(extensionLogDirectoryOption)!;
+        var solutionPath = parseResult.GetValue(solutionPathOption);
 
         var serverConfiguration = new ServerConfiguration(
             LaunchDebugger: launchDebugger,
@@ -205,7 +219,8 @@ static CliRootCommand CreateCommandLineParser()
             SessionId: sessionId,
             SharedDependenciesPath: sharedDependenciesPath,
             ExtensionAssemblyPaths: extensionAssemblyPaths,
-            ExtensionLogDirectory: extensionLogDirectory);
+            ExtensionLogDirectory: extensionLogDirectory,
+            SolutionPath: solutionPath);
 
         return RunAsync(serverConfiguration, cancellationToken);
     });
